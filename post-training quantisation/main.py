@@ -83,6 +83,7 @@ def model_eval(data_loader, batch_size=128):
         total_num = 0
         idx = 0
         iterations , use_cuda = arguments[0], arguments[1]
+        print(iterations)
         if use_cuda:
             model.cuda()
         for sample, label in tqdm(data_loader):
@@ -117,7 +118,7 @@ def arguments():
     parser.add_argument('--seed',                       help='Seed number for reproducibility', type=int, default=0)
     parser.add_argument('--model',                      help='model name', default='resnet18', type=str,
                                                         choices=['alexnet', 'vgg11', 'resnet18', 'mobilenetv2'])
-    parser.add_argument('--quant-scheme',               help='Quantization scheme', default='minmax', type=str)
+    parser.add_argument('--quant-scheme',               help='Quantization scheme', default='mse', type=str, choices=['mse', 'minmax'])
     parser.add_argument('--bitwidth',                   help='bitwidth', type=int, default=8)
     parser.add_argument('--batch-size',                 help='Data batch size for a model', type = int, default=128)
     parser.add_argument('--num-workers',                help='Number of workers to run data loader in parallel', type = int, default=2)
@@ -147,9 +148,17 @@ def get_loaders(args):
             transforms.ToTensor(),
             normalize,
         ])
-    val_data = CIFAR10(root='data/', download=True, train=False, transform=val_transforms)
+    train_transforms = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ])
+    val_data = CIFAR10(root='content/drive/MyDrive/Quantizations/data/', download=True, train=False, transform=val_transforms)
+    train_data = CIFAR10(root='content/drive/MyDrive/Quantizations/data/', download=True, transform=train_transforms)
     val_dataloader = DataLoader(val_data, args.batch_size, shuffle = False, pin_memory = True, **data_loader_kwargs)
-    return val_dataloader
+    train_dataloader = DataLoader(train_data, args.batch_size, shuffle = True, pin_memory = True, **data_loader_kwargs)
+    return val_dataloader,train_dataloader
 
 def get_conv_layers(model):
     conv_layers = []
@@ -160,7 +169,7 @@ def get_conv_layers(model):
 
 def set_quant_mode(quantized):
     def set_precision_mode(module):
-        if isinstance(module, Quantizers):
+        if isinstance(module, (Quantizers)):
             module.set_quantize(quantized)
             module.estimate_range(flag = False)
     return set_precision_mode
@@ -181,8 +190,10 @@ def main():
     seed(args)
     model = load_model(args, pretrained = True)
 
-    val_dataloader = get_loaders(args)
+    val_dataloader = get_loaders(args)[0]
+    train_dataloader = get_loaders(args)[1]
 
+    calibrate_func = model_eval(train_dataloader, batch_size=args.batch_size)
     eval_func = model_eval(val_dataloader, batch_size=args.batch_size)
 
     model.cuda()
@@ -199,7 +210,7 @@ def main():
     model.apply(bn_fold)
 
     model.apply(run_calibration(calibration = True))
-    eval_func(model, (1024./args.batch_size, True))
+    calibrate_func(model, (args.batch_size, True))
 
     model.apply(set_quant_mode(quantized = True))
 
