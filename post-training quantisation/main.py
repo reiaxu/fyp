@@ -160,7 +160,7 @@ def get_conv_layers(model):
 
 def set_quant_mode(quantized):
     def set_precision_mode(module):
-        if isinstance(module, (Quantizers, LSQActivations)):
+        if isinstance(module, Quantizers):
             module.set_quantize(quantized)
             module.estimate_range(flag = False)
     return set_precision_mode

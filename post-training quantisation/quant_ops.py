@@ -2,30 +2,6 @@ import torch
 from torch import nn
 import math
 
-class FuncLSQ(torch.autograd.Function):
-	'''
-	Borrowed code from https://github.com/hustzxd/LSQuantization
-	'''
-	@staticmethod
-	def forward(ctx, weight, alpha, g, Qn, Qp):
-		assert alpha > 0, 'alpha = {}'.format(alpha)
-		ctx.save_for_backward(weight, alpha)
-		ctx.other = g, Qn, Qp
-		q_w = (weight / alpha).round().clamp(Qn, Qp)
-		w_q = q_w * alpha
-		return w_q
-	@staticmethod
-	def backward(ctx, grad_weight):
-		weight, alpha = ctx.saved_tensors
-		q, Qn, Qp = ctx.other
-		q_w = weight / alpha
-		indicate_small = (q_w < Qn).float()
-		indicate_big = (q_w > Qp).float()
-		indicate_middle = torch.ones(indicate_small.shape) - indicate_small - indicate_big
-		grad_alpha = ((indicate_small * Qn + indicate_big * Qp + indicate_middle * (
-                -q_w + q_w.round())) * grad_weight * g).sum().unsqueeze(dim=0)
-		grad_weight = indicate_middle * grad_weight
-		return grad_weight, grad_alpha, None, None, None
 
 class Quantizers(nn.Module):
 	def __init__(self, bw, quant_mode = 'minmax', act_q = True, quantize = False):
@@ -198,31 +174,3 @@ class PassThroughOp(nn.Module):
 
 	def forward(self, x):
 		return x
-
-class LSQActivations(nn.Module):
-	def __init__(self, args, activation, scale = None):
-		super(LSQActivations, self).__init__()
-		self.activation_func = activation
-		if scale:
-			self.alpha = torch.nn.Parameter(torch.Tensor(scale))
-		else:
-			self.alpha = torch.nn.Parameter(torch.Tensor(1))
-		self.Qn = 0
-		self.Qp = 2** args.bitwidth -1
-		self.is_quantize = False
-
-	def set_quantize(self, flag):
-		self.is_quantize = flag
-		
-	def estimate_range(self, flag):
-		self.calibration = flag
-
-	def forward(self, x):
-		x = self.activation_func(x)
-		if self.is_quantize:
-			g = 1.0 / math.sqrt(x.numel() * self.Qp)
-			x_q = FuncLSQ.apply(x, self.alpha, g, self.Qn, self.Qp)
-			return x_q
-		return x
-
-
