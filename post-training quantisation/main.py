@@ -181,9 +181,6 @@ def run_calibration(calibration):
             module.estimate_range(flag = calibration)
     return estimate_range
 
-'''
-Code borrowed from https://github.com/yhhhli/BRECQ/blob/main/quant/data_utils.py
-'''
 
 def main():
     args = arguments()

@@ -25,17 +25,7 @@ class Quantizers(nn.Module):
 		self.calibration = flag
 
 	def init_params(self, x_f):
-		'''
-		https://heartbeat.fritz.ai/quantization-arithmetic-421e66afd842
 		
-		There exist two modes
-		1) Symmetric:
-			Symmetric quantization uses absolute max value as its min/max meaning symmetric with respect to zero
-		2) Asymmetric
-			Asymmetric Quantization uses actual min/max, meaning it is asymmetric with respect to zero 
-		
-		Scale factor uses full range [-2**n / 2, 2**n - 1]
-		'''
 		if self.is_symmetric:
 			x_min, x_max = -torch.max(torch.abs(x_f)), torch.max(torch.abs(x_f))
 		else:
@@ -51,11 +41,7 @@ class Quantizers(nn.Module):
 		self.init = True
 
 	def quant_dequant(self, x_f, scale , offset):
-		'''
-		Quantizing
-		Formula is derived from below:
-		https://medium.com/ai-innovation/quantization-on-pytorch-59dea10851e1
-		'''
+		
 		if self.n == 1:
 			x_int = torch.sign( x_f  / scale )
 		else:
@@ -100,12 +86,6 @@ class QuantConv(nn.Module):
 		self.pre_activation = False
 
 	def batchnorm_folding(self):
-		'''
-		https://towardsdatascience.com/speed-up-inference-with-batch-normalization-folding-8a45a83a89d8
-
-		W_fold = gamma * W / sqrt(var + eps)
-		b_fold = (gamma * ( bias - mu ) / sqrt(var + eps)) + beta
-		'''
 		if hasattr(self.conv, 'gamma'):
 			gamma = getattr(self.conv, 'gamma')
 			beta = getattr(self.conv, 'beta')
